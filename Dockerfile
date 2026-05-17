@@ -1,1 +1,18 @@
-﻿FROM eclipse-temurin:17-jdk-alpine AS buildWORKDIR /appCOPY . .RUN chmod +x mvnwRUN ./mvnw clean package -DskipTestsFROM eclipse-temurin:17-jre-alpineWORKDIR /appCOPY --from=build /app/target/*.jar app.jarEXPOSE 8080ENTRYPOINT ["java","-jar","app.jar"]# Added to show in GitHub
+﻿FROM eclipse-temurin:17-jdk-alpine AS build
+
+WORKDIR /app
+
+COPY . .
+
+RUN chmod +x mvnw
+RUN ./mvnw clean package -DskipTests
+
+FROM eclipse-temurin:17-jre-alpine
+
+WORKDIR /app
+
+COPY --from=build /app/target/*.jar app.jar
+
+EXPOSE 8080
+
+ENTRYPOINT ["java","-jar","app.jar"]
