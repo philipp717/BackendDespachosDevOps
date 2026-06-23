@@ -18,7 +18,7 @@ Microservicio Spring Boot para la gestión de despachos, preparado para ejecutar
 
 ## Flujo CI/CD
 
-El workflow `.github/workflows/deploy-eks.yml` se ejecuta con cada `push` a la rama `master`:
+El workflow `.github/workflows/deploy-eks.yml` se ejecuta con cada `push` a las ramas `master` o `PhilippReyes`:
 
 ```text
 GitHub Actions -> Build Docker -> Push Amazon ECR -> Deploy Amazon EKS
