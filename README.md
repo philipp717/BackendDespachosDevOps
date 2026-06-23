@@ -24,7 +24,7 @@ El workflow `.github/workflows/deploy-eks.yml` se ejecuta con cada `push` a las 
 GitHub Actions -> Build Docker -> Push Amazon ECR -> Deploy Amazon EKS
 ```
 
-El pipeline construye la imagen, la publica como:
+El pipeline verifica o crea el repositorio ECR, construye la imagen y la publica como:
 
 ```text
 ACCOUNT_ID.dkr.ecr.AWS_REGION.amazonaws.com/backend-despachos-devops:latest
