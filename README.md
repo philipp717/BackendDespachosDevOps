@@ -87,6 +87,7 @@ Configurar estos Actions secrets en el repositorio:
 
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
+- `AWS_SESSION_TOKEN` (requerido para credenciales temporales de AWS Academy/Labs)
 - `AWS_REGION`
 - `AWS_ACCOUNT_ID`
 - `EKS_CLUSTER_NAME`
