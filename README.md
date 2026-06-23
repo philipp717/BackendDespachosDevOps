@@ -1,109 +1,103 @@
 # Backend Despachos DevOps
 
-## Descripción del Proyecto
+## Descripción
 
-Este microservicio forma parte de la arquitectura DevOps desplegada en AWS.
+Microservicio Spring Boot para la gestión de despachos, preparado para ejecutarse en contenedores sobre Kubernetes en AWS EKS. La aplicación usa Java 17, Maven y variables de entorno para conectarse a una base de datos MySQL en Amazon RDS.
 
-Su objetivo es gestionar funcionalidades relacionadas con despachos dentro del sistema.
-
-El servicio se ejecuta mediante contenedores Docker en una instancia privada.
-
----
-
-## Tecnologías Utilizadas
+## Tecnologías
 
 - Java 17
 - Spring Boot
 - Maven
 - Docker
+- Kubernetes
+- Amazon ECR
+- Amazon EKS
 - GitHub Actions
-- Docker Hub
-- AWS EC2
+- MySQL / Amazon RDS
 
----
+## Flujo CI/CD
 
-## Estructura del Proyecto
+El workflow `.github/workflows/deploy-eks.yml` se ejecuta con cada `push` a la rama `master`:
 
-```bash
-BackendDespachosDevOps/
-│
-├── Springboot-API-REST-DESPACHO/
-│   ├── src/
-│   ├── Dockerfile
-│   ├── pom.xml
-│   └── target/
-│
-├── .github/workflows/deploy.yml
-└── README.md
+```text
+GitHub Actions -> Build Docker -> Push Amazon ECR -> Deploy Amazon EKS
 ```
 
-## Funcionamiento del Proyecto
+El pipeline construye la imagen, la publica como:
 
-El microservicio permite gestionar funcionalidades de despacho dentro de la arquitectura de microservicios.
-
-Se encuentra desplegado en contenedores Docker utilizando AWS EC2.
-
-## Cómo utilizar el Proyecto
-
-1. Clonar repositorio
-```bash
-git clone https://github.com/philipp717/BackendDespachosDevOps.git
+```text
+ACCOUNT_ID.dkr.ecr.AWS_REGION.amazonaws.com/backend-despachos-devops:latest
 ```
 
-2. Entrar al proyecto
-```bash
-cd BackendDespachosDevOps/Springboot-API-REST-DESPACHO
-```
+Luego actualiza el `kubeconfig`, aplica los manifiestos de `k8s/` y verifica el rollout del Deployment `backend-despachos`.
 
-3. Compilar aplicación
+## Construcción local
+
 ```bash
 mvn clean package -DskipTests
-```
-
-4. Construir imagen Docker
-```bash
 docker build -t backend-despachos .
 ```
 
-5. Ejecutar contenedor
+Para ejecutar la imagen localmente, se deben proporcionar las variables de conexión:
+
 ```bash
-docker run -d -p 8081:8080 backend-despachos
+docker run --rm -p 8080:8080 \
+  -e DB_ENDPOINT=host-mysql \
+  -e DB_PORT=3306 \
+  -e DB_NAME=despachos \
+  -e DB_USERNAME=usuario \
+  -e DB_PASSWORD=contraseña \
+  backend-despachos
 ```
 
-## CI/CD
+## Configuración de Kubernetes
 
-El proyecto utiliza GitHub Actions para automatizar:
+Los recursos se despliegan en el namespace `devops`:
 
-- Build Docker
-- Push Docker Hub
-- Deploy automático
+- Deployment `backend-despachos`, inicialmente con 2 réplicas.
+- Service `backend-despachos-service` de tipo `LoadBalancer`, para permitir consumo desde un frontend en el navegador.
+- HPA `backend-despachos-hpa`, con un mínimo de 2, máximo de 5 réplicas y objetivo promedio de CPU del 50%.
 
-## GitHub Actions
+Antes del primer despliegue, crear el namespace y el Secret `mysql-secret` sin guardar credenciales reales en el repositorio:
 
-Archivo utilizado:
+```bash
+kubectl create namespace devops
 
+kubectl create secret generic mysql-secret \
+  --namespace devops \
+  --from-literal=DB_ENDPOINT=RDS_ENDPOINT \
+  --from-literal=DB_PORT=3306 \
+  --from-literal=DB_NAME=DATABASE_NAME \
+  --from-literal=DB_USERNAME=DATABASE_USER \
+  --from-literal=DB_PASSWORD=DATABASE_PASSWORD
 ```
-.github/workflows/deploy.yml
+
+Para aplicar manualmente los manifiestos, reemplazar `ACCOUNT_ID` y `AWS_REGION` en `k8s/backend-despachos-deployment.yaml` y ejecutar:
+
+```bash
+kubectl apply -f k8s/backend-despachos-deployment.yaml
+kubectl apply -f k8s/backend-despachos-service.yaml
+kubectl apply -f k8s/backend-despachos-hpa.yaml
 ```
 
-## Seguridad
+## Secrets requeridos en GitHub
 
-- Servicio desplegado en subred privada
-- Restricción mediante Security Groups
-- Comunicación interna entre servicios
+Configurar estos Actions secrets en el repositorio:
 
-## Commits Explicativos
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_REGION`
+- `AWS_ACCOUNT_ID`
+- `EKS_CLUSTER_NAME`
 
-El repositorio contiene commits descriptivos relacionados con:
+La cuenta o usuario IAM debe tener permisos para publicar imágenes en el repositorio ECR `backend-despachos-devops`, consultar el clúster EKS y desplegar recursos Kubernetes.
 
-- Dockerización
-- Configuración backend
-- Integración CI/CD
-- Configuración AWS
+## Verificación
 
-Ejemplos:
-```
-update: agrega workflow deploy
-fix: corrige dockerfile
-feat: implementa backend despachos
+```bash
+kubectl get pods -n devops
+kubectl get svc -n devops
+kubectl get hpa -n devops
+kubectl logs -n devops deployment/backend-despachos
 ```

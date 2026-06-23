@@ -1,0 +1,72 @@
+name: Deploy backend to Amazon EKS
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+env:
+  ECR_REPOSITORY: backend-despachos-devops
+  K8S_NAMESPACE: devops
+  DEPLOYMENT_NAME: backend-despachos
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
+          docker build --tag "${IMAGE_URI}" .
+          docker push "${IMAGE_URI}"
+
+      - name: Update EKS kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region "${{ secrets.AWS_REGION }}" \
+            --name "${{ secrets.EKS_CLUSTER_NAME }}"
+
+      - name: Deploy Kubernetes manifests
+        env:
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          kubectl create namespace "${K8S_NAMESPACE}" \
+            --dry-run=client \
+            -o yaml | kubectl apply -f -
+
+          sed \
+            -e "s/ACCOUNT_ID/${AWS_ACCOUNT_ID}/g" \
+            -e "s/AWS_REGION/${AWS_REGION}/g" \
+            k8s/backend-despachos-deployment.yaml | kubectl apply -f -
+
+          kubectl apply -f k8s/backend-despachos-service.yaml
+          kubectl apply -f k8s/backend-despachos-hpa.yaml
+
+      - name: Restart and verify deployment
+        run: |
+          kubectl rollout restart deployment/"${DEPLOYMENT_NAME}" \
+            --namespace "${K8S_NAMESPACE}"
+          kubectl rollout status deployment/"${DEPLOYMENT_NAME}" \
+            --namespace "${K8S_NAMESPACE}" \
+            --timeout=5m
